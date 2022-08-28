@@ -822,6 +822,9 @@ LIBSSH_API uint32_t ssh_buffer_get_data(ssh_buffer buffer, void *data, uint32_t 
 LIBSSH_API void *ssh_buffer_get(ssh_buffer buffer);
 LIBSSH_API uint32_t ssh_buffer_get_len(ssh_buffer buffer);
 
+LIBSSH_API int pki_sign_string(ssh_key privkey, ssh_string input, ssh_string* output);
+LIBSSH_API int pki_verify_string(ssh_key pubkey, ssh_string sig_blob, ssh_string input);
+
 #ifndef LIBSSH_LEGACY_0_4
 #include "libssh/legacy.h"
 #endif

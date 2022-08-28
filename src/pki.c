@@ -2304,6 +2304,86 @@ ssh_signature pki_do_sign(const ssh_key privkey,
     return pki_sign_data(privkey, hash_type, input, input_len);
 }
 
+enum ssh_digest_e key_type_to_hash(enum ssh_keytypes_e type)
+{
+    switch (type) {
+    case SSH_KEYTYPE_DSS_CERT01:
+    case SSH_KEYTYPE_DSS:
+        return SSH_DIGEST_SHA1;
+    case SSH_KEYTYPE_RSA_CERT01:
+    case SSH_KEYTYPE_RSA:
+        return SSH_DIGEST_SHA512;
+    case SSH_KEYTYPE_ECDSA_P256_CERT01:
+    case SSH_KEYTYPE_ECDSA_P256:
+        return SSH_DIGEST_SHA256;
+    case SSH_KEYTYPE_ECDSA_P384_CERT01:
+    case SSH_KEYTYPE_ECDSA_P384:
+        return SSH_DIGEST_SHA384;
+    case SSH_KEYTYPE_ECDSA_P521_CERT01:
+    case SSH_KEYTYPE_ECDSA_P521:
+        return SSH_DIGEST_SHA512;
+    case SSH_KEYTYPE_ED25519_CERT01:
+    case SSH_KEYTYPE_ED25519:
+        return SSH_DIGEST_AUTO;
+    case SSH_KEYTYPE_RSA1:
+    case SSH_KEYTYPE_ECDSA:
+    case SSH_KEYTYPE_UNKNOWN:
+    default:
+        SSH_LOG(SSH_LOG_WARN, "Digest algorithm to be used with key type %u "
+                "is not defined", type);
+    }
+
+    /* We should never reach this */
+    return SSH_DIGEST_AUTO;
+}
+
+int pki_sign_string(ssh_key privkey, ssh_string input, ssh_string* output) 
+{
+    enum ssh_digest_e hash_type = key_type_to_hash(privkey->type);
+    int rc;
+    ssh_signature sig = pki_do_sign(privkey, ssh_string_data(input), ssh_string_len(input), hash_type);
+    if (sig == NULL) {
+        return SSH_ERROR;
+    }
+    rc = ssh_pki_export_signature_blob(sig, output);
+    ssh_signature_free(sig);
+    return rc;
+}
+
+int pki_verify_string(ssh_key pubkey, ssh_string sig_blob, ssh_string input)
+{
+    int rc;
+    ssh_signature sig;
+    rc = ssh_pki_import_signature_blob(sig_blob, pubkey, &sig);
+    if (rc != SSH_OK) {
+        return rc;
+    }
+    SSH_LOG(SSH_LOG_FUNCTIONS,
+            "Going to verify a %s type signature",
+            sig->type_c);
+
+    if (pubkey->type != sig->type) {
+        SSH_LOG(SSH_LOG_WARN,
+                "Can not verify %s signature with %s key",
+                sig->type_c, pubkey->type_c);
+        rc = SSH_ERROR;
+        goto end;
+    }
+
+    /* Check if public key and hash type are compatible */
+    rc = pki_key_check_hash_compatible(pubkey, sig->hash_type);
+    if (rc != SSH_OK) {
+        rc = SSH_ERROR;
+        goto end;
+    }
+
+    rc = pki_verify_data_signature(sig, pubkey, ssh_string_data(input), ssh_string_len(input));
+end:
+    ssh_signature_free(sig);
+    return rc;
+
+}
+
 /*
  * This function signs the session id as a string then
  * the content of sigbuf */
